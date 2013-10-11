@@ -23,6 +23,20 @@
 
 package com.sun.org.apache.xalan.internal.xsltc.trax;
 
+import com.sun.org.apache.xalan.internal.XalanConstants;
+import com.sun.org.apache.xalan.internal.utils.FactoryImpl;
+import com.sun.org.apache.xalan.internal.utils.ObjectFactory;
+import com.sun.org.apache.xalan.internal.utils.SecuritySupport;
+import com.sun.org.apache.xalan.internal.utils.XMLSecurityPropertyManager;
+import com.sun.org.apache.xalan.internal.utils.XMLSecurityPropertyManager.Property;
+import com.sun.org.apache.xalan.internal.utils.XMLSecurityPropertyManager.State;
+import com.sun.org.apache.xalan.internal.xsltc.compiler.Constants;
+import com.sun.org.apache.xalan.internal.xsltc.compiler.SourceLoader;
+import com.sun.org.apache.xalan.internal.xsltc.compiler.XSLTC;
+import com.sun.org.apache.xalan.internal.xsltc.compiler.util.ErrorMsg;
+import com.sun.org.apache.xalan.internal.xsltc.dom.XSLTCDTMManager;
+import com.sun.org.apache.xml.internal.utils.StopParseException;
+import com.sun.org.apache.xml.internal.utils.StylesheetPIHandler;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileNotFoundException;
@@ -37,11 +51,9 @@ import java.util.Properties;
 import java.util.Vector;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipFile;
-
 import javax.xml.XMLConstants;
-import javax.xml.parsers.SAXParserFactory;
 import javax.xml.parsers.SAXParser;
-import javax.xml.parsers.ParserConfigurationException;
+import javax.xml.parsers.SAXParserFactory;
 
 import javax.xml.transform.ErrorListener;
 import javax.xml.transform.Source;
@@ -58,23 +70,9 @@ import javax.xml.transform.sax.SAXSource;
 import javax.xml.transform.sax.SAXTransformerFactory;
 import javax.xml.transform.sax.TemplatesHandler;
 import javax.xml.transform.sax.TransformerHandler;
+import javax.xml.transform.stax.*;
 import javax.xml.transform.stream.StreamResult;
 import javax.xml.transform.stream.StreamSource;
-import javax.xml.transform.stax.*;
-
-import com.sun.org.apache.xml.internal.utils.StylesheetPIHandler;
-import com.sun.org.apache.xml.internal.utils.StopParseException;
-
-import com.sun.org.apache.xalan.internal.XalanConstants;
-import com.sun.org.apache.xalan.internal.xsltc.compiler.Constants;
-import com.sun.org.apache.xalan.internal.xsltc.compiler.SourceLoader;
-import com.sun.org.apache.xalan.internal.xsltc.compiler.XSLTC;
-import com.sun.org.apache.xalan.internal.xsltc.compiler.util.ErrorMsg;
-import com.sun.org.apache.xalan.internal.xsltc.dom.XSLTCDTMManager;
-import com.sun.org.apache.xalan.internal.utils.ObjectFactory;
-import com.sun.org.apache.xalan.internal.utils.FactoryImpl;
-import com.sun.org.apache.xalan.internal.utils.SecuritySupport;
-
 import org.xml.sax.InputSource;
 import org.xml.sax.XMLFilter;
 import org.xml.sax.XMLReader;
@@ -201,14 +199,6 @@ public class TransformerFactoryImpl
     private int _indentNumber = -1;
 
     /**
-     * The provider of the XSLTC DTM Manager service.  This is fixed for any
-     * instance of this class.  In order to change service providers, a new
-     * XSLTC <code>TransformerFactory</code> must be instantiated.
-     * @see XSLTCDTMManager#getDTMManagerClass()
-     */
-    private Class m_DTMManagerClass;
-
-    /**
      * <p>State of secure processing feature.</p>
      */
     private boolean _isNotSecureProcessing = true;
@@ -225,6 +215,18 @@ public class TransformerFactoryImpl
     private boolean _useServicesMechanism;
 
     /**
+     * protocols allowed for external references set by the stylesheet processing instruction, Import and Include element.
+     */
+    private String _accessExternalStylesheet = XalanConstants.EXTERNAL_ACCESS_DEFAULT;
+
+     /**
+     * protocols allowed for external DTD references in source file and/or stylesheet.
+     */
+    private String _accessExternalDTD = XalanConstants.EXTERNAL_ACCESS_DEFAULT;
+
+    private XMLSecurityPropertyManager _xmlSecurityPropertyMgr;
+
+    /**
      * javax.xml.transform.sax.TransformerFactory implementation.
      */
     public TransformerFactoryImpl() {
@@ -236,12 +238,18 @@ public class TransformerFactoryImpl
     }
 
     private TransformerFactoryImpl(boolean useServicesMechanism) {
-        this.m_DTMManagerClass = XSLTCDTMManager.getDTMManagerClass(useServicesMechanism);
         this._useServicesMechanism = useServicesMechanism;
+
         if (System.getSecurityManager() != null) {
             _isSecureMode = true;
             _isNotSecureProcessing = false;
         }
+
+        _xmlSecurityPropertyMgr = new XMLSecurityPropertyManager();
+        _accessExternalDTD = _xmlSecurityPropertyMgr.getValue(
+                Property.ACCESS_EXTERNAL_DTD);
+        _accessExternalStylesheet = _xmlSecurityPropertyMgr.getValue(
+                Property.ACCESS_EXTERNAL_STYLESHEET);
     }
 
     /**
@@ -253,6 +261,7 @@ public class TransformerFactoryImpl
      * @param listener The error listener to use with the TransformerFactory
      * @throws IllegalArgumentException
      */
+    @Override
     public void setErrorListener(ErrorListener listener)
         throws IllegalArgumentException
     {
@@ -270,6 +279,7 @@ public class TransformerFactoryImpl
      *
      * @return The error listener used with the TransformerFactory
      */
+    @Override
     public ErrorListener getErrorListener() {
         return _errorListener;
     }
@@ -282,6 +292,7 @@ public class TransformerFactoryImpl
      * @return An object representing the attribute value
      * @throws IllegalArgumentException
      */
+    @Override
     public Object getAttribute(String name)
         throws IllegalArgumentException
     {
@@ -302,6 +313,11 @@ public class TransformerFactoryImpl
               return Boolean.FALSE;
         }
 
+        int index = _xmlSecurityPropertyMgr.getIndex(name);
+        if (index > -1) {
+            return _xmlSecurityPropertyMgr.getValueByIndex(index);
+        }
+
         // Throw an exception for all other attributes
         ErrorMsg err = new ErrorMsg(ErrorMsg.JAXP_INVALID_ATTR_ERR, name);
         throw new IllegalArgumentException(err.toString());
@@ -315,6 +331,7 @@ public class TransformerFactoryImpl
      * @param value An object representing the attribute value
      * @throws IllegalArgumentException
      */
+    @Override
     public void setAttribute(String name, Object value)
         throws IllegalArgumentException
     {
@@ -402,6 +419,17 @@ public class TransformerFactoryImpl
             }
         }
 
+        int index = _xmlSecurityPropertyMgr.getIndex(name);
+        if (index > -1) {
+            _xmlSecurityPropertyMgr.setValue(index,
+                    State.APIPROPERTY, (String)value);
+            _accessExternalDTD = _xmlSecurityPropertyMgr.getValue(
+                    Property.ACCESS_EXTERNAL_DTD);
+            _accessExternalStylesheet = _xmlSecurityPropertyMgr.getValue(
+                    Property.ACCESS_EXTERNAL_STYLESHEET);
+            return;
+        }
+
         // Throw an exception for all other attributes
         final ErrorMsg err
             = new ErrorMsg(ErrorMsg.JAXP_INVALID_ATTR_ERR, name);
@@ -429,6 +457,7 @@ public class TransformerFactoryImpl
      *   or the <code>Transformer</code>s or <code>Template</code>s it creates cannot support this feature.
      * @throws NullPointerException If the <code>name</code> parameter is null.
      */
+    @Override
     public void setFeature(String name, boolean value)
         throws TransformerConfigurationException {
 
@@ -444,7 +473,19 @@ public class TransformerFactoryImpl
                 throw new TransformerConfigurationException(err.toString());
             }
             _isNotSecureProcessing = !value;
-            // all done processing feature
+
+            // set external access restriction when FSP is explicitly set
+            if (value && XalanConstants.IS_JDK8_OR_ABOVE) {
+                _xmlSecurityPropertyMgr.setValue(Property.ACCESS_EXTERNAL_DTD,
+                        State.FSP, XalanConstants.EXTERNAL_ACCESS_DEFAULT_FSP);
+                _xmlSecurityPropertyMgr.setValue(Property.ACCESS_EXTERNAL_STYLESHEET,
+                        State.FSP, XalanConstants.EXTERNAL_ACCESS_DEFAULT_FSP);
+                _accessExternalDTD = _xmlSecurityPropertyMgr.getValue(
+                        Property.ACCESS_EXTERNAL_DTD);
+                _accessExternalStylesheet = _xmlSecurityPropertyMgr.getValue(
+                        Property.ACCESS_EXTERNAL_STYLESHEET);
+            }
+
             return;
         }
         else if (name.equals(XalanConstants.ORACLE_FEATURE_SERVICE_MECHANISM)) {
@@ -468,6 +509,7 @@ public class TransformerFactoryImpl
      * @param name The feature name
      * @return 'true' if feature is supported, 'false' if not
      */
+    @Override
     public boolean getFeature(String name) {
         // All supported features should be listed here
         String[] features = {
@@ -519,6 +561,7 @@ public class TransformerFactoryImpl
      * @return The URLResolver used for this TransformerFactory and all
      * Templates and Transformer objects created using this factory
      */
+    @Override
     public URIResolver getURIResolver() {
         return _uriResolver;
     }
@@ -533,6 +576,7 @@ public class TransformerFactoryImpl
      * @param resolver The URLResolver used for this TransformerFactory and all
      * Templates and Transformer objects created using this factory
      */
+    @Override
     public void setURIResolver(URIResolver resolver) {
         _uriResolver = resolver;
     }
@@ -552,13 +596,14 @@ public class TransformerFactoryImpl
      * @return A Source object suitable for passing to the TransformerFactory.
      * @throws TransformerConfigurationException
      */
+    @Override
     public Source  getAssociatedStylesheet(Source source, String media,
                                           String title, String charset)
         throws TransformerConfigurationException {
 
         String baseId;
-        XMLReader reader = null;
-        InputSource isource = null;
+        XMLReader reader;
+        InputSource isource;
 
 
         /**
@@ -640,6 +685,7 @@ public class TransformerFactoryImpl
      * @return A Transformer object that simply copies the source to the result.
      * @throws TransformerConfigurationException
      */
+    @Override
     public Transformer newTransformer()
         throws TransformerConfigurationException
     {
@@ -665,6 +711,7 @@ public class TransformerFactoryImpl
      * @return A Templates object that can be used to create Transformers.
      * @throws TransformerConfigurationException
      */
+    @Override
     public Transformer newTransformer(Source source) throws
         TransformerConfigurationException
     {
@@ -728,6 +775,7 @@ public class TransformerFactoryImpl
      * @return A Templates object that can be used to create Transformers.
      * @throws TransformerConfigurationException
      */
+    @Override
     public Templates newTemplates(Source source)
         throws TransformerConfigurationException
     {
@@ -761,7 +809,7 @@ public class TransformerFactoryImpl
         // If _autoTranslet is true, we will try to load the bytecodes
         // from the translet classes without compiling the stylesheet.
         if (_autoTranslet)  {
-            byte[][] bytecodes = null;
+            byte[][] bytecodes;
             String transletClassName = getTransletBaseName(source);
 
             if (_packageName != null)
@@ -799,6 +847,8 @@ public class TransformerFactoryImpl
                 xsltc.setTemplateInlining(false);
 
         if (!_isNotSecureProcessing) xsltc.setSecureProcessing(true);
+        xsltc.setProperty(XMLConstants.ACCESS_EXTERNAL_STYLESHEET, _accessExternalStylesheet);
+        xsltc.setProperty(XMLConstants.ACCESS_EXTERNAL_DTD, _accessExternalDTD);
         xsltc.init();
 
         // Set a document loader (for xsl:include/import) if defined
@@ -880,15 +930,20 @@ public class TransformerFactoryImpl
 
         // Check that the transformation went well before returning
     if (bytecodes == null) {
-
         Vector errs = xsltc.getErrors();
-        ErrorMsg err = null;
+        ErrorMsg err;
         if (errs != null) {
-            err = (ErrorMsg)errs.get(errs.size()-1);
+            err = (ErrorMsg)errs.elementAt(errs.size()-1);
         } else {
             err = new ErrorMsg(ErrorMsg.JAXP_COMPILE_ERR);
         }
-        TransformerConfigurationException exc =  new TransformerConfigurationException(err.toString(), err.getCause());
+        Throwable cause = err.getCause();
+        TransformerConfigurationException exc;
+        if (cause != null) {
+            exc =  new TransformerConfigurationException(cause.getMessage(), cause);
+        } else {
+            exc =  new TransformerConfigurationException(err.toString());
+        }
 
         // Pass compiler errors to the error listener
         if (_errorListener != null) {
@@ -921,6 +976,7 @@ public class TransformerFactoryImpl
      * @return A TemplatesHandler object that can handle SAX events
      * @throws TransformerConfigurationException
      */
+    @Override
     public TemplatesHandler newTemplatesHandler()
         throws TransformerConfigurationException
     {
@@ -940,6 +996,7 @@ public class TransformerFactoryImpl
      * @return A TransformerHandler object that can handle SAX events
      * @throws TransformerConfigurationException
      */
+    @Override
     public TransformerHandler newTransformerHandler()
         throws TransformerConfigurationException
     {
@@ -960,6 +1017,7 @@ public class TransformerFactoryImpl
      * @return A TransformerHandler object that can handle SAX events
      * @throws TransformerConfigurationException
      */
+    @Override
     public TransformerHandler newTransformerHandler(Source src)
         throws TransformerConfigurationException
     {
@@ -980,6 +1038,7 @@ public class TransformerFactoryImpl
      * @return A TransformerHandler object that can handle SAX events
      * @throws TransformerConfigurationException
      */
+    @Override
     public TransformerHandler newTransformerHandler(Templates templates)
         throws TransformerConfigurationException
     {
@@ -997,6 +1056,7 @@ public class TransformerFactoryImpl
      * @return An XMLFilter object, or null if this feature is not supported.
      * @throws TransformerConfigurationException
      */
+    @Override
     public XMLFilter newXMLFilter(Source src)
         throws TransformerConfigurationException
     {
@@ -1014,6 +1074,7 @@ public class TransformerFactoryImpl
      * @return An XMLFilter object, or null if this feature is not supported.
      * @throws TransformerConfigurationException
      */
+    @Override
     public XMLFilter newXMLFilter(Templates templates)
         throws TransformerConfigurationException
     {
@@ -1045,6 +1106,7 @@ public class TransformerFactoryImpl
      * @throws TransformerException if the application chooses to discontinue
      * the transformation (always does in our case).
      */
+    @Override
     public void error(TransformerException e)
         throws TransformerException
     {
@@ -1073,6 +1135,7 @@ public class TransformerFactoryImpl
      * @throws TransformerException if the application chooses to discontinue
      * the transformation (always does in our case).
      */
+    @Override
     public void fatalError(TransformerException e)
         throws TransformerException
     {
@@ -1101,6 +1164,7 @@ public class TransformerFactoryImpl
      * @throws TransformerException if the application chooses to discontinue
      * the transformation (never does in our case).
      */
+    @Override
     public void warning(TransformerException e)
         throws TransformerException
     {
@@ -1124,6 +1188,7 @@ public class TransformerFactoryImpl
      * @param xsltc The compiler that resuests the document
      * @return An InputSource with the loaded document
      */
+    @Override
     public InputSource loadSource(String href, String context, XSLTC xsltc) {
         try {
             if (_uriResolver != null) {
@@ -1210,7 +1275,7 @@ public class TransformerFactoryImpl
         Vector bytecodes = new Vector();
         int fileLength = (int)transletFile.length();
         if (fileLength > 0) {
-            FileInputStream input = null;
+            FileInputStream input;
             try {
                 input = new FileInputStream(transletFile);
             }
@@ -1242,6 +1307,7 @@ public class TransformerFactoryImpl
         // Find all the auxiliary files which have a name pattern of "transletClass$nnn.class".
         final String transletAuxPrefix = transletName + "$";
         File[] auxfiles = transletParentFile.listFiles(new FilenameFilter() {
+                @Override
                 public boolean accept(File dir, String name)
                 {
                     return (name.endsWith(".class") && name.startsWith(transletAuxPrefix));
@@ -1305,7 +1371,7 @@ public class TransformerFactoryImpl
             xslFile = new File(xslFileName);
 
         // Construct the path for the jar file
-        String jarPath = null;
+        String jarPath;
         if (_destinationDirectory != null)
             jarPath = _destinationDirectory + "/" + _jarFileName;
         else {
@@ -1330,7 +1396,7 @@ public class TransformerFactoryImpl
         }
 
         // Create a ZipFile object for the jar file
-        ZipFile jarFile = null;
+        ZipFile jarFile;
         try {
             jarFile = new ZipFile(file);
         }
@@ -1448,7 +1514,7 @@ public class TransformerFactoryImpl
             if (file.exists())
                 return systemId;
             else {
-                URL url = null;
+                URL url;
                 try {
                     url = new URL(systemId);
                 }
@@ -1467,9 +1533,9 @@ public class TransformerFactoryImpl
     }
 
     /**
-     * Returns the Class object the provides the XSLTC DTM Manager service.
+     * Returns a new instance of the XSLTC DTM Manager service.
      */
-    protected Class getDTMManagerClass() {
-        return m_DTMManagerClass;
+    protected final XSLTCDTMManager createNewDTMManagerInstance() {
+        return XSLTCDTMManager.createNewDTMManagerInstance();
     }
 }
