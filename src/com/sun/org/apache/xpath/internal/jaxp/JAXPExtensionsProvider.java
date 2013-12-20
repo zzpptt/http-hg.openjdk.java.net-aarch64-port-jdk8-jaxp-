@@ -33,7 +33,6 @@ import com.sun.org.apache.xpath.internal.objects.XObject;
 import com.sun.org.apache.xpath.internal.objects.XNodeSet;
 import com.sun.org.apache.xpath.internal.res.XPATHErrorResources;
 import com.sun.org.apache.xalan.internal.res.XSLMessages;
-import com.sun.org.apache.xalan.internal.utils.FeatureManager;
 
 import com.sun.org.apache.xpath.internal.functions.FuncExtFunction;
 import java.util.Vector;
@@ -55,12 +54,9 @@ public class JAXPExtensionsProvider implements ExtensionsProvider {
     }
 
     public JAXPExtensionsProvider(XPathFunctionResolver resolver,
-        boolean featureSecureProcessing, FeatureManager featureManager ) {
+        boolean featureSecureProcessing ) {
         this.resolver = resolver;
-        if (featureSecureProcessing &&
-                !featureManager.isFeatureEnabled(FeatureManager.Feature.ORACLE_ENABLE_EXTENSION_FUNCTION)) {
-            this.extensionInvocationDisabled = true;
-        }
+        this.extensionInvocationDisabled = featureSecureProcessing;
     }
 
     /**

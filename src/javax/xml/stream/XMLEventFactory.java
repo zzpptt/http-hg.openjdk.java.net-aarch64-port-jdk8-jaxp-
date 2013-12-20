@@ -84,13 +84,7 @@ public abstract class XMLEventFactory {
    * <li>
    *   Use the service-provider loading facilities, defined by the
    *   {@link java.util.ServiceLoader} class, to attempt to locate and load an
-   *   implementation of the service using the {@linkplain
-   *   java.util.ServiceLoader#load(java.lang.Class) default loading mechanism}:
-   *   the service-provider loading facility will use the {@linkplain
-   *   java.lang.Thread#getContextClassLoader() current thread's context class loader}
-   *   to attempt to load the service. If the context class
-   *   loader is null, the {@linkplain
-   *   ClassLoader#getSystemClassLoader() system class loader} will be used.
+   *   implementation of the service.
    * </li>
    * <li>
    *   Otherwise, the system-default implementation is returned.
@@ -158,13 +152,7 @@ public abstract class XMLEventFactory {
    *   If {@code factoryId} is "javax.xml.stream.XMLEventFactory",
    *   use the service-provider loading facilities, defined by the
    *   {@link java.util.ServiceLoader} class, to attempt to locate and load an
-   *   implementation of the service using the {@linkplain
-   *   java.util.ServiceLoader#load(java.lang.Class) default loading mechanism}:
-   *   the service-provider loading facility will use the {@linkplain
-   *   java.lang.Thread#getContextClassLoader() current thread's context class loader}
-   *   to attempt to load the service. If the context class
-   *   loader is null, the {@linkplain
-   *   ClassLoader#getSystemClassLoader() system class loader} will be used.
+   *   implementation of the service.
    * </li>
    * <li>
    *   Otherwise, throws a {@link FactoryConfigurationError}.

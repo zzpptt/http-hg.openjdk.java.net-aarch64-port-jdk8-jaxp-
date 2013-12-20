@@ -86,7 +86,7 @@ final class Import extends TopLevelElement {
             if (input == null) {
                 docToLoad = SystemIDResolver.getAbsoluteURI(docToLoad, currLoadedDoc);
                 String accessError = SecuritySupport.checkAccess(docToLoad,
-                        (String)xsltc.getProperty(XMLConstants.ACCESS_EXTERNAL_STYLESHEET),
+                        xsltc.getProperty(XMLConstants.ACCESS_EXTERNAL_STYLESHEET),
                         XalanConstants.ACCESS_EXTERNAL_ALL);
 
                 if (accessError != null) {

@@ -43,14 +43,12 @@ import javax.xml.XMLConstants;
 
 import com.sun.org.apache.bcel.internal.classfile.JavaClass;
 import com.sun.org.apache.xalan.internal.XalanConstants;
-import com.sun.org.apache.xalan.internal.utils.FeatureManager;
-import com.sun.org.apache.xalan.internal.utils.FeatureManager.Feature;
 import com.sun.org.apache.xalan.internal.utils.SecuritySupport;
-import com.sun.org.apache.xalan.internal.utils.XMLSecurityManager;
 import com.sun.org.apache.xalan.internal.xsltc.compiler.util.ErrorMsg;
 import com.sun.org.apache.xalan.internal.xsltc.compiler.util.Util;
 import com.sun.org.apache.xml.internal.dtm.DTM;
 
+import com.sun.org.apache.xalan.internal.utils.SecuritySupport;
 import org.xml.sax.InputSource;
 import org.xml.sax.XMLReader;
 
@@ -148,16 +146,12 @@ public final class XSLTC {
      */
     private String _accessExternalDTD = XalanConstants.EXTERNAL_ACCESS_DEFAULT;
 
-    private XMLSecurityManager _xmlSecurityManager;
-
-    private final FeatureManager _featureManager;
 
     /**
      * XSLTC compiler constructor
      */
-    public XSLTC(boolean useServicesMechanism, FeatureManager featureManager) {
+    public XSLTC(boolean useServicesMechanism) {
         _parser = new Parser(this, useServicesMechanism);
-        _featureManager = featureManager;
     }
 
     /**
@@ -187,26 +181,15 @@ public final class XSLTC {
         _useServicesMechanism = flag;
     }
 
-     /**
-     * Return the value of the specified feature
-     * @param name name of the feature
-     * @return true if the feature is enabled, false otherwise
-     */
-    public boolean getFeature(Feature name) {
-        return _featureManager.isFeatureEnabled(name);
-    }
-
     /**
      * Return allowed protocols for accessing external stylesheet.
      */
-    public Object getProperty(String name) {
+    public String getProperty(String name) {
         if (name.equals(XMLConstants.ACCESS_EXTERNAL_STYLESHEET)) {
             return _accessExternalStylesheet;
         }
         else if (name.equals(XMLConstants.ACCESS_EXTERNAL_DTD)) {
             return _accessExternalDTD;
-        } else if (name.equals(XalanConstants.SECURITY_MANAGER)) {
-            return _xmlSecurityManager;
         }
         return null;
     }
@@ -214,14 +197,12 @@ public final class XSLTC {
     /**
      * Set allowed protocols for accessing external stylesheet.
      */
-    public void setProperty(String name, Object value) {
+    public void setProperty(String name, String value) {
         if (name.equals(XMLConstants.ACCESS_EXTERNAL_STYLESHEET)) {
             _accessExternalStylesheet = (String)value;
         }
         else if (name.equals(XMLConstants.ACCESS_EXTERNAL_DTD)) {
             _accessExternalDTD = (String)value;
-        } else if (name.equals(XalanConstants.SECURITY_MANAGER)) {
-            _xmlSecurityManager = (XMLSecurityManager)value;
         }
     }
 

@@ -689,13 +689,9 @@ import java.util.Objects;
         if (!initializeAuthority(uriSpec.substring(startPos, index))) {
           index = startPos - 2;
         }
-      } else if (index < uriSpecLen) {
-        //Same as java.net.URI:
-        // DEVIATION: Allow empty authority prior to non-empty
-        // path, query component or fragment identifier
+      }
+      else {
         m_host = "";
-      } else {
-        throw new MalformedURIException("Expected authority.");
       }
     }
 
